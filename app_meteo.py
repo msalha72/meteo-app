@@ -562,33 +562,92 @@ elif menu == "🗺️ Carte interactive":
                                  title=f"Prévisions 5 jours - {closest_city}",
                                  labels={'value': 'Température (°C)', 'variable': ''})
                     st.plotly_chart(fig, use_container_width=True)
-# Option dans la carte pour choisir Maroc/Monde
-elif menu == "🗺️ Carte interactive":
-    st.markdown("## 🗺️ Carte Météo Interactive")
+# Page Villes du Monde
+elif menu == "🌍 Villes du Monde":
+    st.markdown("## 🌍 Météo des Villes Internationales")
     
-    # Choix de la région
-    region = st.radio(
-        "Région à afficher",
-        ["🇲🇦 Maroc", "🌍 Monde"],
-        horizontal=True
-    )
+    # Sélection de la ville
+    col1, col2 = st.columns([1, 3])
     
-    if region == "🇲🇦 Maroc":
-        villes = VILLES_MAROC
-        centre = [31.7917, -7.0926]
-        zoom = 6
-    else:
-        # Créer un dict combiné pour le monde
-        villes = {}
-        for city, coords in VILLES_MONDE.items():
-            villes[city] = {
-                "coords": coords,
-                "region": "International",
-                "description": "",
-                "image": "🌍"
-            }
-        centre = [30, 0]  # Centre du monde
-        zoom = 2					
+    with col1:
+        selected_city = st.selectbox("Choisissez une ville", list(VILLES_MONDE.keys()))
+    
+    if selected_city:
+        coords = VILLES_MONDE[selected_city]
+        data = get_weather(selected_city, coords)
+        
+        if data:
+            current = data['current']
+            daily = data['daily']
+            
+            # Cartes d'information
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.markdown(f"""
+                <div class='weather-card'>
+                    <h3>🌡️ Température</h3>
+                    <p class='temp-big'>{current['temperature_2m']}°C</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div class='weather-card'>
+                    <h3>💧 Humidité</h3>
+                    <p class='temp-big'>{current['relative_humidity_2m']}%</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown(f"""
+                <div class='weather-card'>
+                    <h3>🌬️ Vent</h3>
+                    <p class='temp-big'>{current['wind_speed_10m']} km/h</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col4:
+                weather_code = current.get('weather_code', 0)
+                weather_info = WEATHER_CODES.get(weather_code, {"text": "Inconnu", "emoji": "🌤️"})
+                st.markdown(f"""
+                <div class='weather-card'>
+                    <h3>☁️ État</h3>
+                    <p style='font-size: 3em;'>{weather_info['emoji']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Graphique des prévisions
+            st.markdown("### 📅 Prévisions 7 jours")
+            
+            df = pd.DataFrame({
+                'Date': daily['time'],
+                'Min (°C)': daily['temperature_2m_min'],
+                'Max (°C)': daily['temperature_2m_max']
+            })
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df['Date'], y=df['Max (°C)'], name='Max', line=dict(color='red')))
+            fig.add_trace(go.Scatter(x=df['Date'], y=df['Min (°C)'], name='Min', line=dict(color='blue')))
+            
+            fig.update_layout(
+                title=f"Évolution des températures - {selected_city}",
+                xaxis_title="Date",
+                yaxis_title="Température (°C)",
+                hovermode='x'
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Informations supplémentaires
+            with st.expander("ℹ️ Informations sur la ville"):
+                st.markdown(f"""
+                - **Ville** : {selected_city}
+                - **Coordonnées** : {coords[0]:.2f}°N, {coords[1]:.2f}°E
+                - **Fuseau horaire** : {data.get('timezone', 'N/A')}
+                """)
+        else:
+            st.error(f"Impossible de récupérer les données météo pour {selected_city}")					
 # Page Chat Météo
 elif menu == "💬 Chat Météo":
     st.markdown("## 💬 Discutez avec votre Expert Météo")
