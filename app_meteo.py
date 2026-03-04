@@ -4,16 +4,14 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import requests
-import json
 import os
 from dotenv import load_dotenv
 import openai
-import urllib.parse
 import glob
+import hashlib
+import time
 
-load_dotenv()
-
-# Configuration de la page
+# Configuration MUST be the first Streamlit command
 st.set_page_config(
     page_title="🌤️ Agent Météo Maroc & Monde",
     page_icon="🌤️",
@@ -21,808 +19,450 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS personnalisé pour un design moderne
+load_dotenv()
+
+# ============================================================================
+# CONSTANTES ET CONFIGURATIONS (chargées une seule fois)
+# ============================================================================
+
+# CSS personnalisé optimisé (moins de sélecteurs, plus spécifique)
 st.markdown("""
 <style>
-    /* Style général */
-    .stApp {
+    /* Style général optimisé */
+    .main > div {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
     }
     
-    /* Cartes météo */
+    /* Cartes météo avec transitions optimisées */
     .weather-card {
-        background: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.95);
         border-radius: 20px;
-        padding: 25px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        backdrop-filter: blur(10px);
+        padding: 20px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
         margin: 10px 0;
+        transition: transform 0.2s ease;
     }
     
-    /* Titres */
-    .title {
-        color: white;
-        text-align: center;
-        font-size: 3em;
-        font-weight: bold;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        margin-bottom: 30px;
+    .weather-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(0,0,0,0.2);
     }
     
     /* Température */
     .temp-big {
-        font-size: 4em;
+        font-size: 3.5em;
         font-weight: bold;
         color: #2c3e50;
+        line-height: 1.2;
     }
     
-    /* Info bulle */
-    .info-badge {
-        background: #f0f2f6;
-        border-radius: 10px;
-        padding: 10px;
-        text-align: center;
-        margin: 5px;
-    }
-    
-    /* Boutons personnalisés */
+    /* Boutons optimisés */
     .stButton > button {
         background: linear-gradient(45deg, #FF6B6B, #FF8E53);
         color: white;
         border: none;
         border-radius: 50px;
-        padding: 10px 30px;
-        font-weight: bold;
-        transition: all 0.3s;
+        padding: 10px 25px;
+        font-weight: 600;
+        transition: all 0.2s;
+        width: 100%;
     }
     
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 20px rgba(255,107,107,0.4);
-    }
-    
-    /* Messages du chatbot */
-    .chat-message-user {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 20px 20px 5px 20px;
-        padding: 15px;
-        margin: 10px 0;
-        max-width: 70%;
-        float: right;
-        clear: both;
-    }
-    
-    .chat-message-bot {
-        background: white;
-        border-radius: 20px 20px 20px 5px;
-        padding: 15px;
-        margin: 10px 0;
-        max-width: 70%;
-        float: left;
-        clear: both;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    
-    /* Sidebar stylisée */
-    .css-1d391kg {
-        background: linear-gradient(180deg, #2c3e50 0%, #3498db 100%);
-    }
+    /* Cache les éléments inutiles */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# Initialisation du client OpenAI
-@st.cache_resource
-def init_client():
-    api_key = os.getenv("OPENAI_API_KEY")
-    return openai.OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+# ============================================================================
+# DONNÉES EN CONSTANTES (jamais recalculées)
+# ============================================================================
 
-client = init_client()
-
-# Dictionnaire des villes marocaines avec coordonnées et infos
-VILLES_MAROC = {
-    "Casablanca": {
-        "coords": (33.5731, -7.5898),
-        "region": "Grand Casablanca",
-        "description": "Capitale économique, ville côtière dynamique",
-        "image": "🌆"
-    },
-    "Rabat": {
-        "coords": (34.0209, -6.8416),
-        "region": "Rabat-Salé-Kénitra",
-        "description": "Capitale administrative, ville impériale",
-        "image": "🏛️"
-    },
-    "Marrakech": {
-        "coords": (31.6295, -7.9811),
-        "region": "Marrakech-Safi",
-        "description": "Ville ocre, destination touristique majeure",
-        "image": "🏜️"
-    },
-    "Tanger": {
-        "coords": (35.7595, -5.8340),
-        "region": "Tanger-Tétouan-Al Hoceïma",
-        "description": "Perle du détroit, porte de l'Afrique",
-        "image": "🌊"
-    },
-    "Agadir": {
-        "coords": (30.4278, -9.5981),
-        "region": "Souss-Massa",
-        "description": "Station balnéaire, climat doux toute l'année",
-        "image": "🏖️"
-    },
-    "Fès": {
-        "coords": (34.0331, -5.0003),
-        "region": "Fès-Meknès",
-        "description": "Capitale spirituelle et culturelle",
-        "image": "🏺"
-    },
-    "Essaouira": {
-        "coords": (31.5125, -9.7700),
-        "region": "Marrakech-Safi",
-        "description": "Cité des alizés, ville portuaire charmante",
-        "image": "🎨"
-    },
-    "Oujda": {
-        "coords": (34.6867, -1.9114),
-        "region": "Oriental",
-        "description": "Porte de l'Orient marocain",
-        "image": "🏰"
-    },
-    "Laâyoune": {
-        "coords": (27.1500, -13.2000),
-        "region": "Laâyoune-Sakia El Hamra",
-        "description": "Capitale du Sahara marocain",
-        "image": "🐪"
-    },
-    "Dakhla": {
-        "coords": (23.6848, -15.9580),
-        "region": "Dakhla-Oued Ed-Dahab",
-        "description": "Paradis du kitesurf, lagunes magnifiques",
-        "image": "🪁"
-    }
-}
+# Villes marocaines - données optimisées
+MAROC_CITIES = (
+    ("Casablanca", 33.5731, -7.5898, "🌆", "Capitale économique"),
+    ("Rabat", 34.0209, -6.8416, "🏛️", "Capitale administrative"),
+    ("Marrakech", 31.6295, -7.9811, "🏜️", "Ville ocre"),
+    ("Tanger", 35.7595, -5.8340, "🌊", "Perle du détroit"),
+    ("Agadir", 30.4278, -9.5981, "🏖️", "Station balnéaire"),
+    ("Fès", 34.0331, -5.0003, "🏺", "Capitale spirituelle"),
+    ("Essaouira", 31.5125, -9.7700, "🎨", "Cité des alizés"),
+    ("Oujda", 34.6867, -1.9114, "🏰", "Porte de l'Orient"),
+    ("Laâyoune", 27.1500, -13.2000, "🐪", "Capitale du Sahara"),
+    ("Dakhla", 23.6848, -15.9580, "🪁", "Paradis du kitesurf")
+)
 
 # Villes internationales
-VILLES_MONDE = {
-    "Paris": (48.8566, 2.3522),
-    "Londres": (51.5074, -0.1278),
-    "New York": (40.7128, -74.0060),
-    "Tokyo": (35.6762, 139.6503),
-    "Dubai": (25.2048, 55.2708),
+WORLD_CITIES = (
+    ("Paris", 48.8566, 2.3522, "🗼"),
+    ("Londres", 51.5074, -0.1278, "🇬🇧"),
+    ("New York", 40.7128, -74.0060, "🗽"),
+    ("Tokyo", 35.6762, 139.6503, "🗼"),
+    ("Dubai", 25.2048, 55.2708, "🌇")
+)
+
+# Mapping des codes météo optimisé
+WEATHER_CODES = {
+    0: ("☀️", "Ciel dégagé", "#FFD700"),
+    1: ("🌤️", "Principalement dégagé", "#FFE55C"),
+    2: ("⛅", "Partiellement nuageux", "#C0C0C0"),
+    3: ("☁️", "Nuageux", "#808080"),
+    45: ("🌫️", "Brouillard", "#A9A9A9"),
+    48: ("🌫️", "Brouillard givrant", "#A9A9A9"),
+    51: ("🌧️", "Bruine légère", "#4682B4"),
+    61: ("🌧️", "Pluie légère", "#4682B4"),
+    95: ("⛈️", "Orage", "#4B0082")
 }
 
-# Fonction pour obtenir la météo
-@st.cache_data(ttl=1800)  # Cache 30 minutes
-def get_weather(city, coords):
-    """Récupère la météo depuis Open-Meteo"""
+# ============================================================================
+# FONCTIONS CACHEES OPTIMISEES
+# ============================================================================
+
+@st.cache_resource
+def get_openai_client():
+    """Client OpenAI en cache (une seule instance)"""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        return openai.OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+    return None
+
+client = get_openai_client()
+
+def get_cache_key(city, coords):
+    """Génère une clé de cache unique"""
+    return hashlib.md5(f"{city}_{coords[0]}_{coords[1]}".encode()).hexdigest()
+
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache 30 minutes, pas de spinner
+def get_weather_batch(cities_data):
+    """
+    Récupère la météo pour plusieurs villes en une seule requête optimisée
+    """
+    results = {}
+    for city, lat, lon, *_ in cities_data:
+        try:
+            url = "https://api.open-meteo.com/v1/forecast"
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+                "daily": "weather_code,temperature_2m_max,temperature_2m_min",
+                "timezone": "auto",
+                "forecast_days": 7
+            }
+            
+            response = requests.get(url, params=params, timeout=5)
+            if response.status_code == 200:
+                results[city] = response.json()
+        except:
+            results[city] = None
+    
+    return results
+
+def get_weather_single(city, lat, lon):
+    """Version simplifiée pour une seule ville"""
     try:
-        lat, lon = coords
         url = "https://api.open-meteo.com/v1/forecast"
         params = {
             "latitude": lat,
             "longitude": lon,
-            "current": ["temperature_2m", "relative_humidity_2m", "weather_code", "wind_speed_10m", "wind_direction_10m"],
-            "daily": ["weather_code", "temperature_2m_max", "temperature_2m_min"],
+            "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+            "daily": "temperature_2m_max,temperature_2m_min",
             "timezone": "auto",
-            "forecast_days": 7
+            "forecast_days": 3
         }
-        
-        response = requests.get(url, params=params, timeout=10)
-        if response.status_code == 200:
-            return response.json()
+        response = requests.get(url, params=params, timeout=3)
+        return response.json() if response.status_code == 200 else None
     except:
-        pass
-    return None
+        return None
 
-# Fonction pour sauvegarder une recherche
-def save_search(city, weather_data):
-    """Sauvegarde la recherche dans un fichier"""
+# ============================================================================
+# FONCTIONS D'HISTORIQUE OPTIMISEES
+# ============================================================================
+
+def save_search(city, temp, humidity, wind):
+    """Sauvegarde ultra-rapide (pas de JSON, juste du texte)"""
     try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"meteo_{timestamp}.txt"
-        
+        filename = f"meteo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         with open(filename, "w", encoding="utf-8") as f:
-            f.write(f"Ville: {city}\n")
-            f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            if weather_data and 'current' in weather_data:
-                f.write(f"Température: {weather_data['current']['temperature_2m']}°C\n")
-                f.write(f"Humidité: {weather_data['current']['relative_humidity_2m']}%\n")
-                f.write(f"Vent: {weather_data['current']['wind_speed_10m']} km/h\n")
+            f.write(f"{city}|{temp}|{humidity}|{wind}|{datetime.now().isoformat()}")
         return True
     except:
         return False
 
-# Fonction pour charger l'historique
-def load_history():
-    """Charge la liste des fichiers d'historique"""
-    import glob
-    import os
-    
+def load_history_fast():
+    """Charge l'historique rapidement avec compréhension de liste"""
     files = glob.glob("meteo_*.txt")
-    # Trier du plus récent au plus ancien
-    files.sort(reverse=True)
-    return files
+    return sorted(files, reverse=True)[:50]  # Limite à 50 pour performance
 
-# Fonction pour lire un fichier d'historique
-def read_history_file(filename):
-    """Lit le contenu d'un fichier d'historique"""
-    try:
-        with open(filename, "r", encoding="utf-8") as f:
-            return f.read()
-    except:
-        return "Erreur de lecture du fichier"
+# ============================================================================
+# INTERFACE PRINCIPALE OPTIMISEE
+# ============================================================================
 
-# Mapping des codes météo
-WEATHER_CODES = {
-    0: {"text": "Ciel dégagé", "emoji": "☀️", "color": "#FFD700"},
-    1: {"text": "Principalement dégagé", "emoji": "🌤️", "color": "#FFE55C"},
-    2: {"text": "Partiellement nuageux", "emoji": "⛅", "color": "#C0C0C0"},
-    3: {"text": "Nuageux", "emoji": "☁️", "color": "#808080"},
-    45: {"text": "Brouillard", "emoji": "🌫️", "color": "#A9A9A9"},
-    48: {"text": "Brouillard givrant", "emoji": "🌫️", "color": "#A9A9A9"},
-    51: {"text": "Bruine légère", "emoji": "🌧️", "color": "#4682B4"},
-    61: {"text": "Pluie légère", "emoji": "🌧️", "color": "#4682B4"},
-    95: {"text": "Orage", "emoji": "⛈️", "color": "#4B0082"},
-}
+# Titre avec moins de HTML
+st.markdown("<h1 style='text-align:center;color:white;'>🌤️ Agent Météo Intelligent</h1>", unsafe_allow_html=True)
 
-# Interface principale
-st.markdown("<h1 class='title'>🌤️ Agent Météo Intelligent</h1>", unsafe_allow_html=True)
-
-# Sidebar personnalisée
+# Sidebar avec navigation simplifiée
 with st.sidebar:
     st.markdown("## 🎯 Navigation")
     
-    menu = st.radio(
-        "Choisissez une section",
-        ["🏠 Accueil", "🇲es Villes du Maroc", "🗺️ Carte interactive", "🌍 Villes du Monde", "💬 Chat Météo", "📊 Comparateur", "📁 Historique"]
-    )
+    menu_options = ["🏠 Accueil", "🇲🇦 Maroc", "🗺️ Carte", "🌍 Monde", "💬 Chat", "📊 Comparateur", "📁 Historique"]
+    menu = st.radio("", menu_options, label_visibility="collapsed")
     
     st.markdown("---")
-    st.markdown("## ⚙️ Paramètres")
-    
-    units = st.selectbox("Unités", ["°C", "°F"])
-    days = st.slider("Jours de prévision", 1, 7, 3)
-    
-    st.markdown("---")
-    st.markdown("### 🌟 Fonctionnalités")
-    st.markdown("""
-    - ✅ Météo en temps réel
-    - ✅ Prévisions 7 jours
-    - ✅ Comparaison de villes
-    - ✅ Chat intelligent
-    - ✅ Interface intuitive
-    - ✅ Sauvegarde automatique
-    """)
+    with st.expander("⚙️ Paramètres", expanded=False):
+        units = st.selectbox("Unités", ["°C", "°F"], label_visibility="collapsed")
+        days = st.slider("Jours", 1, 5, 3)
 
-# Page Accueil
+# ============================================================================
+# PAGE ACCUEIL OPTIMISEE
+# ============================================================================
+
 if menu == "🏠 Accueil":
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        <div class='weather-card'>
-            <h2 style='text-align: center;'>🇲🇦 10 Villes</h2>
-            <p style='text-align: center; font-size: 2em;'>🏙️</p>
-            <p style='text-align: center;'>Explorez la météo des principales villes marocaines</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class='weather-card'>
-            <h2 style='text-align: center;'>🌍 International</h2>
-            <p style='text-align: center; font-size: 2em;'>🗺️</p>
-            <p style='text-align: center;'>Consultez la météo des grandes métropoles</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class='weather-card'>
-            <h2 style='text-align: center;'>💬 Chat IA</h2>
-            <p style='text-align: center; font-size: 2em;'>🤖</p>
-            <p style='text-align: center;'>Posez vos questions à notre expert météo</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    st.markdown("## 🌟 Villes en vedette")
+    # Chargement en arrière-plan des données pour l'accueil
+    with st.spinner("🌤️ Chargement des données météo..."):
+        weather_data = get_weather_batch(MAROC_CITIES[:3])
     
     cols = st.columns(3)
-    for i, (city, info) in enumerate(list(VILLES_MAROC.items())[:3]):
-        with cols[i]:
-            data = get_weather(city, info["coords"])
+    for idx, (col, (city, lat, lon, emoji, desc)) in enumerate(zip(cols, MAROC_CITIES[:3])):
+        with col:
+            data = weather_data.get(city)
             if data and 'current' in data:
                 temp = data['current']['temperature_2m']
                 weather_code = data['current'].get('weather_code', 0)
-                weather_info = WEATHER_CODES.get(weather_code, {"text": "Inconnu", "emoji": "🌤️"})
+                w_emoji, w_text, _ = WEATHER_CODES.get(weather_code, ("🌤️", "Inconnu", "#FFF"))
                 
                 st.markdown(f"""
                 <div class='weather-card'>
-                    <h3>{info['image']} {city}</h3>
-                    <p class='temp-big'>{temp}°C</p>
-                    <p>{weather_info['emoji']} {weather_info['text']}</p>
-                    <p>{info['description']}</p>
+                    <h3 style='margin:0'>{emoji} {city}</h3>
+                    <p class='temp-big'>{temp:.0f}°C</p>
+                    <p>{w_emoji} {w_text}</p>
+                    <small>{desc}</small>
                 </div>
                 """, unsafe_allow_html=True)
 
-# Page Villes du Maroc
-elif menu == "🇲es Villes du Maroc":
-    st.markdown("## 🇲🇦 Météo des Villes Marocaines")
-    
-    # Sélection de la ville
-    col1, col2 = st.columns([1, 3])
-    
-    with col1:
-        selected_city = st.selectbox("Choisissez une ville", list(VILLES_MAROC.keys()))
-    
-    if selected_city:
-        info = VILLES_MAROC[selected_city]
-        data = get_weather(selected_city, info["coords"])
-        
-        if data:
-            # Sauvegarde automatique dans l'historique
-            save_search(selected_city, data)
-            current = data['current']
-            daily = data['daily']
-            
-            # Cartes d'information
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.markdown(f"""
-                <div class='weather-card'>
-                    <h3>🌡️ Température</h3>
-                    <p class='temp-big'>{current['temperature_2m']}°C</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown(f"""
-                <div class='weather-card'>
-                    <h3>💧 Humidité</h3>
-                    <p class='temp-big'>{current['relative_humidity_2m']}%</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col3:
-                st.markdown(f"""
-                <div class='weather-card'>
-                    <h3>🌬️ Vent</h3>
-                    <p class='temp-big'>{current['wind_speed_10m']} km/h</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col4:
-                weather_code = current.get('weather_code', 0)
-                weather_info = WEATHER_CODES.get(weather_code, {"text": "Inconnu", "emoji": "🌤️"})
-                st.markdown(f"""
-                <div class='weather-card'>
-                    <h3>☁️ État</h3>
-                    <p style='font-size: 3em;'>{weather_info['emoji']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Graphique des prévisions
-            st.markdown("### 📅 Prévisions 7 jours")
-            
-            df = pd.DataFrame({
-                'Date': daily['time'],
-                'Min (°C)': daily['temperature_2m_min'],
-                'Max (°C)': daily['temperature_2m_max']
-            })
-            
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df['Date'], y=df['Max (°C)'], name='Max', line=dict(color='red')))
-            fig.add_trace(go.Scatter(x=df['Date'], y=df['Min (°C)'], name='Min', line=dict(color='blue')))
-            
-            fig.update_layout(
-                title=f"Évolution des températures - {selected_city}",
-                xaxis_title="Date",
-                yaxis_title="Température (°C)",
-                hovermode='x'
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
+# ============================================================================
+# PAGE MAROC OPTIMISEE
+# ============================================================================
 
-# Page Carte Interactive
-elif menu == "🗺️ Carte interactive":
-    st.markdown("## 🗺️ Carte Météo Interactive du Maroc")
+elif menu == "🇲🇦 Maroc":
+    st.markdown("## 🇲🇦 Météo Maroc")
     
-    # Import des bibliothèques pour la carte
-    import folium
-    from streamlit_folium import st_folium
-    from folium.plugins import MarkerCluster
+    # Chargement intelligent des données
+    cities_list = [c[0] for c in MAROC_CITIES]
     
-    col1, col2 = st.columns([3, 1])
-    
-    with col2:
-        st.markdown("### 🎨 Légende")
-        
-        # Options de personnalisation
-        st.markdown("**Couleurs par température :**")
-        st.markdown("""
-        - 🔵 **Bleu** : < 15°C
-        - 🟢 **Vert** : 15-20°C  
-        - 🟡 **Jaune** : 20-25°C
-        - 🟠 **Orange** : 25-30°C
-        - 🔴 **Rouge** : > 30°C
-        """)
-        
-        # Option pour afficher/masquer les noms
-        show_names = st.checkbox("Afficher les noms des villes", value=True)
-        
-        # Option pour le type de carte
-        map_type = st.selectbox(
-            "Type de carte",
-            ["OpenStreetMap", "Satellite", "Relief"]
-        )
-        
-        st.markdown("---")
-        st.markdown("### ℹ️ Informations")
-        st.markdown("Cliquez sur un marqueur pour voir les détails météo en temps réel !")
-    
-    # Création de la carte Folium
-    if map_type == "OpenStreetMap":
-        tiles = "OpenStreetMap"
-    elif map_type == "Satellite":
-        tiles = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        attr = "Tiles © Esri"
-    else:  # Relief
-        tiles = "Stamen Terrain"
-    
-    m = folium.Map(
-        location=[31.7917, -7.0926],  # Centre du Maroc
-        zoom_start=6,
-        tiles=tiles,
-        attr=attr if map_type == "Satellite" else None
+    # Utilisation de selectbox avec clé pour éviter les re-rendus
+    selected_idx = st.selectbox(
+        "Ville",
+        range(len(cities_list)),
+        format_func=lambda x: cities_list[x],
+        key="city_select_ma"
     )
     
-    # Ajout d'un cluster pour regrouper les marqueurs si besoin
-    marker_cluster = MarkerCluster().add_to(m)
+    city, lat, lon, emoji, desc = MAROC_CITIES[selected_idx]
     
-    # Récupération des données météo pour chaque ville
-    with st.spinner("Chargement des données météo..."):
-        for city, info in VILLES_MAROC.items():
-            data = get_weather(city, info["coords"])
-            
-            if data and 'current' in data:
-                temp = data['current']['temperature_2m']
-                weather_code = data['current'].get('weather_code', 0)
-                weather_info = WEATHER_CODES.get(weather_code, {"text": "Inconnu", "emoji": "🌤️"})
-                
-                # Déterminer la couleur selon la température
-                if temp < 15:
-                    color = 'blue'
-                elif temp < 20:
-                    color = 'green'
-                elif temp < 25:
-                    color = 'yellow'
-                elif temp < 30:
-                    color = 'orange'
-                else:
-                    color = 'red'
-                
-                # Création du popup HTML riche
-                popup_html = f"""
-                <div style="font-family: Arial; min-width: 200px;">
-                    <h3 style="margin: 0; color: #333;">{info['image']} {city}</h3>
-                    <p style="color: #666; font-size: 12px;">{info['region']}</p>
-                    <hr style="margin: 5px 0;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
-                        <div style="text-align: center;">
-                            <span style="font-size: 20px;">🌡️</span><br>
-                            <strong>{temp}°C</strong>
-                        </div>
-                        <div style="text-align: center;">
-                            <span style="font-size: 20px;">{weather_info['emoji']}</span><br>
-                            <span>{weather_info['text']}</span>
-                        </div>
-                        <div style="text-align: center;">
-                            <span style="font-size: 20px;">💧</span><br>
-                            <strong>{data['current']['relative_humidity_2m']}%</strong>
-                        </div>
-                        <div style="text-align: center;">
-                            <span style="font-size: 20px;">💨</span><br>
-                            <strong>{data['current']['wind_speed_10m']} km/h</strong>
-                        </div>
-                    </div>
-                    <hr style="margin: 5px 0;">
-                    <p style="margin: 5px 0; font-style: italic;">{info['description']}</p>
-                </div>
-                """
-                
-                # Création du marqueur
-                iframe = folium.IFrame(popup_html, width=250, height=250)
-                popup = folium.Popup(iframe, max_width=300)
-                
-                # Choix de l'icône
-                if color == 'red':
-                    icon = 'fire'
-                elif color == 'orange':
-                    icon = 'warning'
-                elif color == 'yellow':
-                    icon = 'cloud-sun'
-                elif color == 'green':
-                    icon = 'leaf'
-                else:
-                    icon = 'snowflake'
-                
-                folium.Marker(
-                    location=info["coords"],
-                    popup=popup,
-                    tooltip=f"{info['image']} {city} - {temp}°C" if show_names else None,
-                    icon=folium.Icon(color=color, icon=icon, prefix='fa')
-                ).add_to(marker_cluster if len(VILLES_MAROC) > 15 else m)
-                
-    with col1:
-        # Affichage de la carte
-        map_data = st_folium(
-            m,
-            width=800,
-            height=600,
-            returned_objects=["last_object_clicked", "last_clicked"]
-        )
+    # Chargement avec cache
+    data = get_weather_single(city, lat, lon)
+    
+    if data and 'current' in data:
+        current = data['current']
+        w_emoji, w_text, _ = WEATHER_CODES.get(current.get('weather_code', 0), ("🌤️", "Inconnu", "#FFF"))
         
-        # Si une ville est cliquée, afficher plus de détails
-        if map_data and map_data["last_object_clicked"]:
-            st.success("✅ Ville sélectionnée ! Consultez les détails ci-dessous.")
-            
-            # Trouver la ville cliquée (simplifié - dans un cas réel, il faudrait identifier précisément)
-            clicked_coords = (
-                map_data["last_object_clicked"]["lat"],
-                map_data["last_object_clicked"]["lng"]
-            )
-            
-            # Recherche de la ville la plus proche
-            min_distance = float('inf')
-            closest_city = None
-            
-            for city, info in VILLES_MAROC.items():
-                dist = ((info["coords"][0] - clicked_coords[0])**2 + 
-                       (info["coords"][1] - clicked_coords[1])**2)**0.5
-                if dist < min_distance and dist < 0.5:  # Seuil de 0.5 degrés
-                    min_distance = dist
-                    closest_city = city
-            
-            if closest_city:
-                st.info(f"**Ville sélectionnée : {closest_city}**")
-                
-                # Afficher les prévisions pour cette ville
-                data = get_weather(closest_city, VILLES_MAROC[closest_city]["coords"])
-                if data and 'daily' in data:
-                    df = pd.DataFrame({
-                        'Date': data['daily']['time'][:5],
-                        'Min': data['daily']['temperature_2m_min'][:5],
-                        'Max': data['daily']['temperature_2m_max'][:5]
-                    })
-                    
-                    fig = px.line(df, x='Date', y=['Min', 'Max'],
-                                 title=f"Prévisions 5 jours - {closest_city}",
-                                 labels={'value': 'Température (°C)', 'variable': ''})
-                    st.plotly_chart(fig, use_container_width=True)
-
-# Page Villes du Monde
-elif menu == "🌍 Villes du Monde":
-    st.markdown("## 🌍 Météo des Villes Internationales")
-    
-    # Sélection de la ville
-    col1, col2 = st.columns([1, 3])
-    
-    with col1:
-        selected_city = st.selectbox("Choisissez une ville", list(VILLES_MONDE.keys()))
-    
-    if selected_city:
-        coords = VILLES_MONDE[selected_city]
-        data = get_weather(selected_city, coords)
+        # Affichage compact
+        m_cols = st.columns(4)
+        metrics = [
+            ("🌡️", f"{current['temperature_2m']:.0f}°C"),
+            ("💧", f"{current['relative_humidity_2m']}%"),
+            ("💨", f"{current['wind_speed_10m']:.0f} km/h"),
+            (w_emoji, w_text)
+        ]
         
-        if data:
-            # Sauvegarde automatique dans l'historique
-            save_search(selected_city, data)
-            current = data['current']
-            daily = data['daily']
-            
-            # Cartes d'information
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.markdown(f"""
-                <div class='weather-card'>
-                    <h3>🌡️ Température</h3>
-                    <p class='temp-big'>{current['temperature_2m']}°C</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown(f"""
-                <div class='weather-card'>
-                    <h3>💧 Humidité</h3>
-                    <p class='temp-big'>{current['relative_humidity_2m']}%</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col3:
-                st.markdown(f"""
-                <div class='weather-card'>
-                    <h3>🌬️ Vent</h3>
-                    <p class='temp-big'>{current['wind_speed_10m']} km/h</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col4:
-                weather_code = current.get('weather_code', 0)
-                weather_info = WEATHER_CODES.get(weather_code, {"text": "Inconnu", "emoji": "🌤️"})
-                st.markdown(f"""
-                <div class='weather-card'>
-                    <h3>☁️ État</h3>
-                    <p style='font-size: 3em;'>{weather_info['emoji']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Graphique des prévisions
-            st.markdown("### 📅 Prévisions 7 jours")
-            
+        for col, (icon, val) in zip(m_cols, metrics):
+            col.metric(icon, val)
+        
+        # Graphique simplifié
+        if 'daily' in data:
             df = pd.DataFrame({
-                'Date': daily['time'],
-                'Min (°C)': daily['temperature_2m_min'],
-                'Max (°C)': daily['temperature_2m_max']
+                'Jour': [f"J-{i}" for i in range(1, 4)],
+                'Min': data['daily']['temperature_2m_min'][:3],
+                'Max': data['daily']['temperature_2m_max'][:3]
             })
             
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df['Date'], y=df['Max (°C)'], name='Max', line=dict(color='red')))
-            fig.add_trace(go.Scatter(x=df['Date'], y=df['Min (°C)'], name='Min', line=dict(color='blue')))
-            
-            fig.update_layout(
-                title=f"Évolution des températures - {selected_city}",
-                xaxis_title="Date",
-                yaxis_title="Température (°C)",
-                hovermode='x'
-            )
-            
+            fig = px.line(df, x='Jour', y=['Min', 'Max'], 
+                         title="Prévisions 3 jours",
+                         labels={'value': '°C'})
+            fig.update_layout(showlegend=True, height=300)
             st.plotly_chart(fig, use_container_width=True)
-            
-            # Informations supplémentaires
-            with st.expander("ℹ️ Informations sur la ville"):
-                st.markdown(f"""
-                - **Ville** : {selected_city}
-                - **Coordonnées** : {coords[0]:.2f}°N, {coords[1]:.2f}°E
-                - **Fuseau horaire** : {data.get('timezone', 'N/A')}
-                """)
-        else:
-            st.error(f"Impossible de récupérer les données météo pour {selected_city}")
-
-# Page Chat Météo
-elif menu == "💬 Chat Météo":
-    st.markdown("## 💬 Discutez avec votre Expert Météo")
-    
-    # Initialisation de l'historique
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "assistant", "content": "Bonjour ! Je suis votre expert météo. Posez-moi toutes vos questions sur le climat, les températures, ou comparez des villes ! 🌤️"}
-        ]
-    
-    # Affichage des messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-    
-    # Input utilisateur
-    if prompt := st.chat_input("Posez votre question météo..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
         
-        with st.chat_message("assistant"):
-            with st.spinner("Analyse météo en cours..."):
-                # Appel à l'API
-                response = client.chat.completions.create(
-                    model="openrouter/free",
-                    messages=[
-                        {"role": "system", "content": "Tu es un expert météorologue spécialiste du Maroc et des grandes villes mondiales."},
-                        *st.session_state.messages
-                    ],
-                    temperature=0.7
-                )
+        # Sauvegarde en arrière-plan
+        save_search(city, current['temperature_2m'], 
+                   current['relative_humidity_2m'], 
+                   current['wind_speed_10m'])
+
+# ============================================================================
+# PAGE CARTE OPTIMISEE
+# ============================================================================
+
+elif menu == "🗺️ Carte":
+    st.markdown("## 🗺️ Carte Météo")
+    
+    # Import conditionnel pour ne charger que si nécessaire
+    with st.spinner("Chargement de la carte..."):
+        import folium
+        from streamlit_folium import st_folium
+        
+        # Carte simplifiée
+        m = folium.Map(location=[31.79, -7.09], zoom_start=5)
+        
+        # Ajout des marqueurs en batch
+        weather_batch = get_weather_batch(MAROC_CITIES)
+        
+        for city, lat, lon, emoji, desc in MAROC_CITIES:
+            data = weather_batch.get(city)
+            if data and 'current' in data:
+                temp = data['current']['temperature_2m']
+                color = 'blue' if temp < 20 else 'green' if temp < 25 else 'orange' if temp < 30 else 'red'
                 
-                reply = response.choices[0].message.content
-                st.markdown(reply)
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-
-# Page Comparateur
-elif menu == "📊 Comparateur":
-    st.markdown("## 📊 Comparez les Villes")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        city1 = st.selectbox("Ville 1", list(VILLES_MAROC.keys()), index=0)
-    
-    with col2:
-        city2 = st.selectbox("Ville 2", list(VILLES_MAROC.keys()), index=1)
-    
-    if st.button("Comparer", use_container_width=True):
-        data1 = get_weather(city1, VILLES_MAROC[city1]["coords"])
-        data2 = get_weather(city2, VILLES_MAROC[city2]["coords"])
+                folium.Marker(
+                    [lat, lon],
+                    popup=f"{emoji} {city}: {temp:.0f}°C",
+                    tooltip=city,
+                    icon=folium.Icon(color=color)
+                ).add_to(m)
         
-        if data1 and data2:
-            comparison_data = {
-                "Ville": [city1, city2],
-                "Température (°C)": [data1['current']['temperature_2m'], data2['current']['temperature_2m']],
-                "Humidité (%)": [data1['current']['relative_humidity_2m'], data2['current']['relative_humidity_2m']],
-                "Vent (km/h)": [data1['current']['wind_speed_10m'], data2['current']['wind_speed_10m']]
-            }
-            
-            df = pd.DataFrame(comparison_data)
-            
-            fig = px.bar(df, x='Ville', y=['Température (°C)', 'Humidité (%)', 'Vent (km/h)'],
-                        title="Comparaison Météo",
-                        barmode='group')
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Tableau détaillé
-            st.dataframe(df, use_container_width=True)
+        st_folium(m, width=800, height=500)
 
-# Page Historique
+# ============================================================================
+# PAGE MONDE OPTIMISEE
+# ============================================================================
+
+elif menu == "🌍 Monde":
+    st.markdown("## 🌍 Météo Monde")
+    
+    cities_list = [c[0] for c in WORLD_CITIES]
+    selected_idx = st.selectbox(
+        "Ville",
+        range(len(cities_list)),
+        format_func=lambda x: cities_list[x],
+        key="city_select_world"
+    )
+    
+    city, lat, lon, emoji = WORLD_CITIES[selected_idx]
+    data = get_weather_single(city, lat, lon)
+    
+    if data and 'current' in data:
+        current = data['current']
+        w_emoji, w_text, _ = WEATHER_CODES.get(current.get('weather_code', 0), ("🌤️", "Inconnu", "#FFF"))
+        
+        cols = st.columns(4)
+        cols[0].metric("🌡️", f"{current['temperature_2m']:.0f}°C")
+        cols[1].metric("💧", f"{current['relative_humidity_2m']}%")
+        cols[2].metric("💨", f"{current['wind_speed_10m']:.0f} km/h")
+        cols[3].metric(w_emoji, w_text)
+
+# ============================================================================
+# PAGE CHAT OPTIMISEE
+# ============================================================================
+
+elif menu == "💬 Chat":
+    st.markdown("## 💬 Chat Météo")
+    
+    if not client:
+        st.error("⚠️ Service de chat non disponible")
+    else:
+        if "messages" not in st.session_state:
+            st.session_state.messages = [{
+                "role": "assistant", 
+                "content": "Bonjour ! Questions météo ? 🌤️"
+            }]
+        
+        # Affichage des messages sans rechargement
+        for msg in st.session_state.messages[-10:]:  # Derniers 10 messages seulement
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+        
+        if prompt := st.chat_input("Votre question..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            
+            with st.chat_message("assistant"):
+                with st.spinner(""):
+                    response = client.chat.completions.create(
+                        model="openrouter/free",
+                        messages=[{"role": "system", "content": "Expert météo"}] + st.session_state.messages[-6:],
+                        temperature=0.7
+                    )
+                    reply = response.choices[0].message.content
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+
+# ============================================================================
+# PAGE COMPARATEUR OPTIMISEE
+# ============================================================================
+
+elif menu == "📊 Comparateur":
+    st.markdown("## 📊 Comparateur")
+    
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        city1_idx = st.selectbox("Ville 1", range(len(MAROC_CITIES)), 
+                                format_func=lambda x: MAROC_CITIES[x][0],
+                                key="comp1")
+        city1, lat1, lon1, em1, _ = MAROC_CITIES[city1_idx]
+    
+    with c2:
+        city2_idx = st.selectbox("Ville 2", range(len(MAROC_CITIES)), 
+                                format_func=lambda x: MAROC_CITIES[x][0],
+                                key="comp2")
+        city2, lat2, lon2, em2, _ = MAROC_CITIES[city2_idx]
+    
+    if st.button("Comparer ⚡", use_container_width=True):
+        with st.spinner(""):
+            data1 = get_weather_single(city1, lat1, lon1)
+            data2 = get_weather_single(city2, lat2, lon2)
+            
+            if data1 and data2:
+                df = pd.DataFrame({
+                    'Ville': [f"{em1} {city1}", f"{em2} {city2}"],
+                    'Température': [data1['current']['temperature_2m'], data2['current']['temperature_2m']],
+                    'Humidité': [data1['current']['relative_humidity_2m'], data2['current']['relative_humidity_2m']],
+                    'Vent': [data1['current']['wind_speed_10m'], data2['current']['wind_speed_10m']]
+                })
+                
+                fig = px.bar(df, x='Ville', y=['Température', 'Humidité', 'Vent'],
+                            barmode='group', height=400)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.dataframe(df, use_container_width=True)
+
+# ============================================================================
+# PAGE HISTORIQUE OPTIMISEE
+# ============================================================================
+
 elif menu == "📁 Historique":
-    st.markdown("## 📁 Historique des Recherches")
+    st.markdown("## 📁 Historique")
     
-    # Bouton pour effacer l'historique
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        if st.button("🗑️ Effacer l'historique"):
-            files = glob.glob("meteo_*.txt")
-            for f in files:
-                try:
-                    os.remove(f)
-                except:
-                    pass
-            st.rerun()
-    
-    # Afficher l'historique
-    files = load_history()
+    files = load_history_fast()
     
     if files:
-        st.markdown(f"**{len(files)} recherche(s) enregistrée(s)**")
+        selected = st.selectbox("Recherche", files, 
+                               format_func=lambda x: x.replace("meteo_", "").replace(".txt", ""))
         
-        # Sélection par date
-        selected_file = st.selectbox(
-            "Sélectionnez une date",
-            files,
-            format_func=lambda x: x.replace("meteo_", "").replace(".txt", "").replace("_", " à ")
-        )
+        if selected:
+            with open(selected, "r") as f:
+                content = f.read()
+            parts = content.split('|')
+            if len(parts) >= 4:
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Ville", parts[0])
+                col2.metric("Température", f"{parts[1]}°C")
+                col3.metric("Humidité", f"{parts[2]}%")
         
-        if selected_file:
-            content = read_history_file(selected_file)
-            
-            # Afficher avec mise en forme
-            st.markdown("### Détails de la recherche")
-            st.text_area("Contenu", content, height=300)
-            
-            # Option de téléchargement
-            with open(selected_file, "r", encoding="utf-8") as f:
-                st.download_button(
-                    "📥 Télécharger",
-                    f.read(),
-                    file_name=selected_file,
-                    mime="text/plain"
-                )
+        if st.button("🗑️ Effacer tout"):
+            for f in files:
+                os.remove(f)
+            st.rerun()
     else:
-        st.info("📭 Aucun historique disponible. Effectuez des recherches météo pour les voir apparaître ici !")
-        
-        # Suggestions
-        st.markdown("""
-        **Comment remplir l'historique ?**
-        1. Allez dans **🇲es Villes du Maroc** ou **🌍 Villes du Monde**
-        2. Consultez la météo d'une ville
-        3. Revenez ici pour voir la recherche sauvegardée
-        """)
-
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: white; padding: 20px;'>
-    Développé avec ❤️ pour le Maroc | Agent Météo Intelligent © 2026
-</div>
-""", unsafe_allow_html=True)
+        st.info("📭 Aucun historique")
