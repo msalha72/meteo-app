@@ -1,3 +1,6 @@
+https://platform.openai.com/api-keys
+
+
 pip install openai python-dotenv
 notepad .env   ----->Création du fichier .env pour votre clé API
 https://platform.openai.com/chat  ----> création de clé API
@@ -310,3 +313,10 @@ bash
 git remote add origin https://github.com/VOTRE-NOM-UTILISATEUR/meteo-app.git
 git branch -M main
 git push -u origin main
+
+git remote add origin https://github.com/msalha72/meteo-app.git
+git branch -M main
+git push -u origin main
+
+pour Carte interactiv
+pip install folium streamlit-folium

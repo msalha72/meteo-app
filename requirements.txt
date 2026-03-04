@@ -4,3 +4,7 @@ pandas
 plotly
 python-dotenv
 openai
+folium
+streamlit-folium
+geopystreamlit-folium
+
