@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 import openai
 import urllib.parse
+import glob
 
 load_dotenv()
 
@@ -214,6 +215,44 @@ def get_weather(city, coords):
         pass
     return None
 
+# Fonction pour sauvegarder une recherche
+def save_search(city, weather_data):
+    """Sauvegarde la recherche dans un fichier"""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"meteo_{timestamp}.txt"
+        
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(f"Ville: {city}\n")
+            f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            if weather_data and 'current' in weather_data:
+                f.write(f"Température: {weather_data['current']['temperature_2m']}°C\n")
+                f.write(f"Humidité: {weather_data['current']['relative_humidity_2m']}%\n")
+                f.write(f"Vent: {weather_data['current']['wind_speed_10m']} km/h\n")
+        return True
+    except:
+        return False
+
+# Fonction pour charger l'historique
+def load_history():
+    """Charge la liste des fichiers d'historique"""
+    import glob
+    import os
+    
+    files = glob.glob("meteo_*.txt")
+    # Trier du plus récent au plus ancien
+    files.sort(reverse=True)
+    return files
+
+# Fonction pour lire un fichier d'historique
+def read_history_file(filename):
+    """Lit le contenu d'un fichier d'historique"""
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            return f.read()
+    except:
+        return "Erreur de lecture du fichier"
+
 # Mapping des codes météo
 WEATHER_CODES = {
     0: {"text": "Ciel dégagé", "emoji": "☀️", "color": "#FFD700"},
@@ -235,9 +274,9 @@ with st.sidebar:
     st.markdown("## 🎯 Navigation")
     
     menu = st.radio(
-    "Choisissez une section",
-    ["🏠 Accueil", "🇲es Villes du Maroc", "🗺️ Carte interactive", "🌍 Villes du Monde", "💬 Chat Météo", "📊 Comparateur", "📁 Historique"]
-)
+        "Choisissez une section",
+        ["🏠 Accueil", "🇲es Villes du Maroc", "🗺️ Carte interactive", "🌍 Villes du Monde", "💬 Chat Météo", "📊 Comparateur", "📁 Historique"]
+    )
     
     st.markdown("---")
     st.markdown("## ⚙️ Paramètres")
@@ -323,6 +362,8 @@ elif menu == "🇲es Villes du Maroc":
         data = get_weather(selected_city, info["coords"])
         
         if data:
+            # Sauvegarde automatique dans l'historique
+            save_search(selected_city, data)
             current = data['current']
             daily = data['daily']
             
@@ -384,9 +425,8 @@ elif menu == "🇲es Villes du Maroc":
             )
             
             st.plotly_chart(fig, use_container_width=True)
-# [Après votre page "🌍 Villes du Monde", avant "💬 Chat Météo"]
 
-# ---- NOUVELLE PAGE : CARTE INTERACTIVE ----
+# Page Carte Interactive
 elif menu == "🗺️ Carte interactive":
     st.markdown("## 🗺️ Carte Météo Interactive du Maroc")
     
@@ -562,6 +602,7 @@ elif menu == "🗺️ Carte interactive":
                                  title=f"Prévisions 5 jours - {closest_city}",
                                  labels={'value': 'Température (°C)', 'variable': ''})
                     st.plotly_chart(fig, use_container_width=True)
+
 # Page Villes du Monde
 elif menu == "🌍 Villes du Monde":
     st.markdown("## 🌍 Météo des Villes Internationales")
@@ -577,6 +618,8 @@ elif menu == "🌍 Villes du Monde":
         data = get_weather(selected_city, coords)
         
         if data:
+            # Sauvegarde automatique dans l'historique
+            save_search(selected_city, data)
             current = data['current']
             daily = data['daily']
             
@@ -647,7 +690,8 @@ elif menu == "🌍 Villes du Monde":
                 - **Fuseau horaire** : {data.get('timezone', 'N/A')}
                 """)
         else:
-            st.error(f"Impossible de récupérer les données météo pour {selected_city}")					
+            st.error(f"Impossible de récupérer les données météo pour {selected_city}")
+
 # Page Chat Météo
 elif menu == "💬 Chat Météo":
     st.markdown("## 💬 Discutez avec votre Expert Météo")
@@ -724,19 +768,56 @@ elif menu == "📊 Comparateur":
 elif menu == "📁 Historique":
     st.markdown("## 📁 Historique des Recherches")
     
-    # Afficher les fichiers de sauvegarde
-    import glob
+    # Bouton pour effacer l'historique
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.button("🗑️ Effacer l'historique"):
+            files = glob.glob("meteo_*.txt")
+            for f in files:
+                try:
+                    os.remove(f)
+                except:
+                    pass
+            st.rerun()
     
-    files = glob.glob("meteo_*.txt")
+    # Afficher l'historique
+    files = load_history()
+    
     if files:
-        selected_file = st.selectbox("Sélectionnez une date", files)
+        st.markdown(f"**{len(files)} recherche(s) enregistrée(s)**")
+        
+        # Sélection par date
+        selected_file = st.selectbox(
+            "Sélectionnez une date",
+            files,
+            format_func=lambda x: x.replace("meteo_", "").replace(".txt", "").replace("_", " à ")
+        )
         
         if selected_file:
+            content = read_history_file(selected_file)
+            
+            # Afficher avec mise en forme
+            st.markdown("### Détails de la recherche")
+            st.text_area("Contenu", content, height=300)
+            
+            # Option de téléchargement
             with open(selected_file, "r", encoding="utf-8") as f:
-                content = f.read()
-            st.text_area("Contenu", content, height=400)
+                st.download_button(
+                    "📥 Télécharger",
+                    f.read(),
+                    file_name=selected_file,
+                    mime="text/plain"
+                )
     else:
-        st.info("Aucun historique disponible")
+        st.info("📭 Aucun historique disponible. Effectuez des recherches météo pour les voir apparaître ici !")
+        
+        # Suggestions
+        st.markdown("""
+        **Comment remplir l'historique ?**
+        1. Allez dans **🇲es Villes du Maroc** ou **🌍 Villes du Monde**
+        2. Consultez la météo d'une ville
+        3. Revenez ici pour voir la recherche sauvegardée
+        """)
 
 # Footer
 st.markdown("---")
