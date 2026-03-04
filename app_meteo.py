@@ -236,7 +236,7 @@ with st.sidebar:
     
     menu = st.radio(
     "Choisissez une section",
-    ["🏠 Accueil", "🇲🇦 Villes du Maroc", "🗺️ Carte interactive", "🌍 Villes du Monde", "💬 Chat Météo", "📊 Comparateur", "📁 Historique"]
+    ["🏠 Accueil", "🇲es Villes du Maroc", "🗺️ Carte interactive", "🌍 Villes du Monde", "💬 Chat Météo", "📊 Comparateur", "📁 Historique"]
 )
     
     st.markdown("---")
@@ -309,7 +309,7 @@ if menu == "🏠 Accueil":
                 """, unsafe_allow_html=True)
 
 # Page Villes du Maroc
-elif menu == "🇲🇦 Villes du Maroc":
+elif menu == "🇲es Villes du Maroc":
     st.markdown("## 🇲🇦 Météo des Villes Marocaines")
     
     # Sélection de la ville
