@@ -1,0 +1,312 @@
+pip install openai python-dotenv
+notepad .env   ----->Création du fichier .env pour votre clé API
+https://platform.openai.com/chat  ----> création de clé API
+# Dans C:\ProjetIA>, tapez :
+notepad assistant.py
+Lancez votre assistant maintenant !
+bash
+# Dans C:\ProjetIA>, tapez simplement :
+python assistant.py
+
+Voici un tableau comparatif des meilleures options gratuites en 2026 :
+
+Fournisseur		Modèle Gratuit Recommandé					Avantages															Lien d'inscription
+Google AI Studio	gemini-2.0-flash ou gemini-1.5-flash				Limites très élevées (1M de tokens/min). Modèle très puissant.									Google AI Studio
+OpenRouter		cognitivecomputations/dolphin3.0-r1-mistral-24b:free ou meta-llama/llama-3.2-3b-instruct:free	Donne accès à des dizaines de modèles (Mistral, Llama, etc.) avec un seul compte.		OpenRouter
+Mistral AI (Le Plateforme)	mistral-8b-latest (ou les modèles "open-weight")	Modèles français très performants et efficaces.											Mistral AI
+Groq			mixtral-8x7b-32768 ou llama-3.3-70b-versatile			Vitesse d'inférence extrêmement rapide. 											Idéal pour du temps réel.
+My key OpenRouter: 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
+
+
+ les codes erreurs : 
+401 Key non valide
+429: L'erreur 429 signifie que le modèle gratuit meta-llama/llama-3.3-70b-instruct:free est temporairement surchargé par le fournisseur ("Venice" dans ce cas). C'est un problème courant avec les modèles gratuits très populaires.
+402: L'erreur 402 persiste peut-être parce que le code appelle par défaut un modèle payant
+404 : modèle spécifique ne fonctionne pas, l'erreur 404 est très informative ! Le modèle google/gemini-2.0-flash-exp:free n'est plus disponible sur OpenRouter
+
+
+Option 2 : Passer en local avec LocalAI
+Si vous voulez que tout soit chez vous, sans aucune connexion internet ni dépendance, vous pouvez utiliser LocalAI. 
+C'est un projet open-source qui émule l'API d'OpenAI en utilisant votre propre ordinateur pour faire tourner les modèles. 
+C'est 100% gratuit et vos données restent chez vous. 
+L'installation est un peu plus technique, mais tout à fait faisable.
+
+Modèle à Tester				Fournisseur
+google/gemma-3-27b-it:free		Google
+microsoft/phi-3.5-mini-128k:free	Microsoft
+mistralai/mistral-7b-instruct-v0.3:free	Mistral AI
+deepseek/deepseek-v3.1-nex-n1:free	DeepSeek
+
+
+Modèle à utiliser			Fournisseur	Avantage
+microsoft/phi-3.5-mini-128k:free	Microsoft	Très stable, 128K de contexte
+mistralai/mistral-7b-instruct-v0.3:free	Mistral	Rapide et fiable
+deepseek/deepseek-chat-v3.1:free	DeepSeek	Excellent pour le code
+qwen/qwen2.5-72b-instruct:free	Alibaba	Modèle très puissant
+
+
+Prochaines étapes pour aller plus loin :
+Maintenant que votre agent fonctionne, voici ce que vous pourriez améliorer :
+
+Changer sa personnalité : Modifiez le prompt système dans le code
+
+Ajouter des capacités : Intégrez des outils (calculatrice, recherche web, météo)
+
+Créer une interface web : Utilisez Streamlit pour une belle interface
+
+Lui donner accès à des fichiers : Pour résumer des documents
+
+Expérimenter d'autres modèles : Testez les différents fournisseurs gratuits
+
+
+
+Les modèles gratuits qui fonctionnent en mars 2026
+D'après les résultats de recherche, voici la liste officielle et vérifiée des modèles gratuits sur OpenRouter ce mois-ci  :
+
+Modèle					Fournisseur	Contexte	Particularité
+xai/grok-4.1-fast:free			xAI		2M tokens	Très rapide, énorme contexte 
+google/gemini-3-flash:free		Google		1M tokens	Modèle multimodal récent 
+deepseek/deepseek-v3.2:free		DeepSeek	163K tokens	Excellent rapport qualité/prix 
+qwen/qwen3.5-plus:free			Alibaba		1M tokens	Raisonnement solide 
+xiaomi/mimo-v2-flash:free		Xiaomi		256K tokens	#1 open-source sur SWE-bench 
+mistralai/devstral-2-2512:free		Mistral		256K tokens	Modèle agentique 
+nvidia/nemotron-3-nano:free		NVIDIA		256K tokens	Poids ouverts, personnalisable 
+google/gemma-3-27b-it:free		Google		131K tokens	Celui qui a déjà fonctionné pour vous !
+arcee-ai/trinity-large-preview:free	Arcee		131K tokens	Modèle MoE performant 
+stepfun/step-3.5-flash:free		StepFun		256K tokens	Raisonnement efficace 
+z-ai/glm-4.5-air:free			Z.ai		131K tokens	Léger et rapide 
+
+
+
+3 pistes pour continuer votre apprentissage
+Modifiez la personnalité de votre agent :
+Dans le code, cherchez la ligne messages=self.conversation et ajoutez un message "system" au début :
+
+python
+self.conversation = [
+    {"role": "system", "content": "Tu es un chef cuisinier expert qui répond avec humour"}
+]
+
+
+Les modèles gratuits qui fonctionnent avec system prompts
+D'après les dernières informations, voici les modèles gratuits actuellement disponibles qui supportent les instructions système :
+
+Modèle (nom EXACT à copier)		Fournisseur	Fiable pour system prompt
+google/gemini-3-flash:free		Google		✅ Oui
+deepseek/deepseek-v3.2:free		DeepSeek	✅ Oui
+qwen/qwen3.5-plus:free			Alibaba		✅ Oui
+xiaomi/mimo-v2-flash:free		Xiaomi		✅ Oui
+stepfun/step-3.5-flash:free		StepFun		✅ Oui
+z-ai/glm-4.5-air:free			Z.ai		✅ Oui
+meta-llama/llama-3.3-70b-instruct:free	Meta		✅ Oui
+
+
+
+Agent Météo
+
+pip install requests pandas tabulate
+
+Quel temps fait-il à Paris ?
+Météo à Tokyo pour 3 jours
+/compare Lyon, Marseille, Bordeaux
+/alerte Lille
+Quelle est la meilleure destination pour un week-end ensoleillé ?
+
+
+Pour aller plus loin :
+Ajoutez OpenWeatherMap : Créez un compte gratuit sur OpenWeatherMap
+
+Ajoutez des cartes : Intégrez des images satellites
+
+Prévisions marines : Pour les ports et côtes
+
+Qualité de l'air : Indice de pollution
+
+Lever/coucher soleil : Horaires précis
+
+Dites-moi ce que vous en pensez !
+
+
+
+INTERFACE GRAPHIQUE ULTRA-ERGONOMIQUE POUR VOTRE AGENT MÉTÉO
+Je vais vous créer une interface moderne et intuitive avec Streamlit - la meilleure librairie Python pour faire des interfaces rapidement !
+
+📦 Installation des dépendances :
+bash
+pip install streamlit pandas plotly streamlit_option_menu
+
+
+C'est quoi Streamlit ?
+Streamlit est une bibliothèque Python open-source qui transforme vos scripts Python en applications web magnifiques en quelques minutes. C'est littéralement de la magie !
+
+⚡ Pourquoi Streamlit est génial :
+Avantage	Explication
+🚀 Ultra-rapide	Créez une app web en 5 minutes chrono
+🐍 100% Python	Pas besoin de HTML, CSS ou JavaScript
+🔄 Auto-reload	Modifiez votre code, l'app se met à jour toute seule
+📊 Intégration parfaite	Compatible avec pandas, matplotlib, plotly
+🎨 Widgets intégrés	Sliders, boutons, sélecteurs déjà prêts
+🌐 Déploiement facile	Un clic pour mettre en ligne sur Streamlit Cloud
+
+
+# Sans Streamlit : des heures de code
+- Interface HTML/CSS
+- JavaScript pour l'interactivité
+- Gestion des sessions
+- Mise en page responsive
+- Graphiques interactifs
+- Cache management
+
+# Avec Streamlit : 5 minutes
+- st.markdown() pour le style
+- st.button() pour les boutons
+- st.selectbox() pour les listes
+- st.columns() pour la mise en page
+- st.plotly_chart() pour les graphiques
+- @st.cache_data pour la performance
+
+
+Les meilleures fonctionnalités que vous utilisez déjà :
+python
+# 1. Layout automatique
+col1, col2, col3 = st.columns(3)  # 3 colonnes parfaitement alignées !
+
+# 2. Widgets interactifs
+ville = st.selectbox("Choisissez une ville", list(VILLES_MAROC.keys()))
+jours = st.slider("Jours", 1, 7, 3)
+
+# 3. Cache intelligent
+@st.cache_data(ttl=1800)  # Les données restent 30 minutes en cache
+def get_weather(city):
+    # Appel API - ne se répète pas si la ville n'a pas changé
+
+# 4. Markdown pour le style
+st.markdown("<h1 style='color: blue;'>Titre</h1>", unsafe_allow_html=True)
+
+# 5. Graphiques interactifs
+fig = px.bar(df)  # Graphique Plotly directement intégrable
+st.plotly_chart(fig)
+📊 Comparaison avec d'autres approches :
+Technologie	Temps de dev	Complexité	Résultat
+Streamlit	10 minutes	🟢 Facile	🟢 Pro
+Flask + HTML/CSS	2 jours	🟡 Moyen	🟢 Pro
+Django	1 semaine	🔴 Complexe	🟢 Pro
+JavaScript (React)	1 mois	🔴 Très complexe	🟢 Pro
+🎮 Ce que vous POURRIEZ créer avec Streamlit :
+📱 Tableaux de bord pour entreprises
+
+🤖 Interfaces pour agents IA (comme vous venez de le faire !)
+
+📊 Outils d'analyse de données
+
+🎨 Générateurs d'images IA
+
+📈 Applications financières
+
+🏥 Outils médicaux
+
+📚 Plateformes éducatives
+
+💡 Astuces Streamlit que vous allez adorer :
+python
+# 1. Sidebar magique
+with st.sidebar:
+    st.title("Navigation")
+    choix = st.radio("Menu", ["Accueil", "Profil"])
+
+# 2. État persistant
+if "compteur" not in st.session_state:
+    st.session_state.compteur = 0
+
+if st.button("Cliquez !"):
+    st.session_state.compteur += 1
+
+# 3. Messages stylisés
+st.success("✅ Opération réussie !")
+st.warning("⚠️ Attention !")
+st.error("❌ Erreur !")
+st.info("ℹ️ Information")
+
+# 4. Téléchargement de données
+csv = df.to_csv()
+st.download_button("📥 Télécharger", csv)
+
+# 5. Fichiers uploadés
+uploaded_file = st.file_uploader("Choisissez un fichier")
+🚀 Pour aller plus loin avec Streamlit :
+1. Déployez votre app en ligne GRATUITEMENT :
+
+Créez un compte sur share.streamlit.io
+
+Connectez votre GitHub
+
+Un clic = votre app en ligne accessible partout !
+
+2. Thèmes personnalisés :
+Créez un fichier .streamlit/config.toml :
+
+toml
+[theme]
+primaryColor = "#FF4B4B"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#31333F"
+font = "sans serif"
+3. Widgets avancés :
+
+python
+st.color_picker("Choisissez une couleur")
+st.date_input("Date")
+st.time_input("Heure")
+st.file_uploader("Upload")
+st.camera_input("Prenez une photo")
+🎯 Le vrai génie de Streamlit :
+"Write scripts, not apps" - Écrivez des scripts, pas des applications. C'est la philosophie. Vous avez écrit du Python normal, et Streamlit l'a transformé en application professionnelle. C'est révolutionnaire !
+
+🏁 Conclusion :
+Streamlit est à Python ce que l'iPhone a été aux téléphones : une révolution de simplicité. Il a rendu le développement d'applications accessible à TOUS les développeurs Python, pas seulement aux experts web.
+
+Votre application météo est maintenant professionnelle, responsive, et prête à être utilisée dans le monde entier - le tout avec du Python pur !
+
+Alors oui, Streamlit est absolument GÉNIAL ! 
+
+Déploiement appplication app_meteo
+Création des fichiers nécessaires
+Étape 1 : Créez le fichier requirements.txt
+bash
+# Dans C:\ProjetIA, créez requirements.txt
+echo streamlit > requirements.txt
+echo requests >> requirements.txt
+Ou ouvrez le fichier avec Notepad et ajoutez :
+
+txt
+streamlit
+requests
+pandas
+plotly
+python-dotenv
+
+
+Étape 2 : Initialisez Git
+bash
+git init
+git add .
+git commit -m "Initial commit - App Météo"
+Étape 3 : Créez un repository sur GitHub
+Allez sur GitHub
+
+Cliquez sur le "+" en haut à droite → "New repository"
+
+Nommez-le (ex: meteo-app)
+
+NE COCHEZ PAS "Initialize with README"
+
+Cliquez sur "Create repository"
+
+Étape 4 : Connectez votre dossier local à GitHub
+GitHub va vous montrer des commandes. Utilisez celles-ci :
+
+bash
+git remote add origin https://github.com/VOTRE-NOM-UTILISATEUR/meteo-app.git
+git branch -M main
+git push -u origin main
